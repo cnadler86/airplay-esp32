@@ -7,6 +7,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_efuse.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
@@ -198,6 +199,25 @@ static void wifi_select_best_ap(const char *ssid) {
   free(ap_list);
 }
 
+static void set_unique_hostname(esp_netif_t *sta_netif) {
+  if (!sta_netif) {
+    ESP_LOGW(TAG, "STA netif is NULL, cannot set hostname");
+    return;
+  }
+
+  uint8_t mac[6];
+  // Read factory MAC from eFuse Block 0
+  esp_efuse_mac_get_default(mac);
+
+  // Build hostname from the last 3 bytes of the MAC
+  char hostname[32];
+  snprintf(hostname, sizeof(hostname), "ESP32_AirPlay_%02X%02X%02X",
+           mac[3], mac[4], mac[5]);
+
+  esp_netif_set_hostname(sta_netif, hostname);
+  ESP_LOGI(TAG, "Hostname set: %s", hostname);
+}
+
 static void wifi_init_base(void) {
   if (s_wifi_initialized) {
     return;
@@ -289,6 +309,10 @@ void wifi_init_apsta(const char *ap_ssid, const char *ap_password) {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_config));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &s_ap_config));
+
+  // Set unique hostname based on MAC address
+  set_unique_hostname(s_sta_netif);
+
   ESP_ERROR_CHECK(esp_wifi_start());
 
   ESP_LOGI(TAG, "AP+STA mode started: AP SSID=%s", default_ssid);

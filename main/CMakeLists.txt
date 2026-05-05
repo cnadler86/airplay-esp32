@@ -88,6 +88,7 @@ set( DEPS
     json
     mbedtls
     esp_driver_ledc
+    efuse
     boards
     dac
     dac_tas58xx
