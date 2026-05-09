@@ -1,0 +1,34 @@
+# ESP32-S2 target defaults - default to ESP32-S2 Generic board
+CONFIG_BOARD_ESP32S2_GENERIC=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# Use smaller partition table for 4MB flash
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="components/boards/partitions-4m.csv"
+
+# ESP32-S2 is single-core and has less DRAM than ESP32/S3
+# Use SPIRAM if available on the board
+# CONFIG_SPIRAM=y
+
+# USB Audio Class defaults for the current usb_device_uac integration.
+# Keep both streams stereo at 48 kHz so the UAC descriptors, feedback,
+# and AirPlay USB backend all use the same resampled output rate.
+CONFIG_UAC_SPEAKER_CHANNEL_NUM=2
+CONFIG_UAC_MIC_CHANNEL_NUM=2
+CONFIG_UAC_SAMPLE_RATE=48000
+
+# GPIO defaults (adjust for your board - ESP32-S2 has 47 GPIO pins)
+CONFIG_BAT_CHANNEL=-1
+CONFIG_LED_RGB_GPIO=-1
+CONFIG_I2S_SCK_IO=-1
+CONFIG_I2S_BCK_IO=34
+CONFIG_I2S_WS_IO=33
+CONFIG_I2S_DO_IO=35
+CONFIG_I2S_GND_IO=-1
+
+# ST7789 TFT display support is not enabled by default.
+# The display is optional hardware — enabling it configures specific SPI
+# GPIO pins which may conflict with other peripherals on your board.
+# To enable, add the following to your own sdkconfig.defaults.esp32s2
+# or run: idf.py menuconfig -> Display Configuration
