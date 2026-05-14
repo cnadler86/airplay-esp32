@@ -1198,13 +1198,12 @@ static void handle_setup(int socket, rtsp_conn_t *conn,
   }
 
 #ifdef CONFIG_BT_A2DP_ENABLE
-  // Apply saved AirPlay volume before playback starts — the DAC may have
+  // Apply saved AirPlay volume before stream setup — the DAC may have
   // been left at a different level by Bluetooth A2DP.
   dac_set_volume(conn->volume_db);
 #endif
 
-  audio_receiver_set_playing(true);
-  conn->stream_paused = false;
+  // Stream is set up but remains paused until RECORD is received
   conn->stream_active = true;
 }
 
