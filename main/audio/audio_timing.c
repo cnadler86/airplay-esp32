@@ -11,6 +11,10 @@
 
 #define DEFAULT_BUFFER_LATENCY_US     200000 // 200ms startup jitter buffer
 #define HARDWARE_OUTPUT_LATENCY_US    46000  // ~46ms I2S DMA latency
+// Additional pipeline latency to account for task scheduling, I2S write
+// blocking, and resampler processing.  Without this, frames pass the
+// timing check "on time" but actually exit the speaker several ms later.
+#define PIPELINE_LATENCY_US           10000  // ~10ms scheduling + write delay
 #define MIN_STARTUP_FRAMES            4
 #define DRIFT_ADJUST_THRESHOLD_FRAMES 2
 #define TIMING_THRESHOLD_US           40000 // 40ms early/late threshold
@@ -117,7 +121,8 @@ static bool compute_early_us(const audio_timing_t *timing,
   }
 
   // Subtract hardware latency to account for I2S DMA delay
-  target_ns -= (int64_t)HARDWARE_OUTPUT_LATENCY_US * 1000LL;
+  // and pipeline latency for task scheduling and write blocking
+  target_ns -= (int64_t)(HARDWARE_OUTPUT_LATENCY_US + PIPELINE_LATENCY_US) * 1000LL;
 
   int64_t now_ns = (int64_t)esp_timer_get_time() * 1000LL;
   *early_us = (target_ns - now_ns) / 1000LL;
