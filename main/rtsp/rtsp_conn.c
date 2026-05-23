@@ -14,6 +14,9 @@ rtsp_conn_t *rtsp_conn_create(void) {
     return NULL;
   }
 
+  // Stream is paused on initial connection
+  conn->stream_paused = true;
+
   // Load saved volume or use default
   float saved_volume;
   if (settings_get_volume(&saved_volume) == ESP_OK) {
