@@ -428,8 +428,30 @@ size_t audio_receiver_read(int16_t *buffer, size_t samples) {
     return 0;
   }
 
-  return audio_timing_read(&receiver.timing, &receiver.buffer, receiver.stream,
-                           &receiver.stats, buffer, samples);
+  size_t result =
+      audio_timing_read(&receiver.timing, &receiver.buffer, receiver.stream,
+                        &receiver.stats, buffer, samples);
+
+  // If audio_timing_read detected a late-frame bulk flush, arm the RTP
+  // discard gate at the TCP receive level.  Stale frames (RTP < gate) are
+  // then dropped by audio_stream_process_frame without entering the ring
+  // buffer, preventing the repeated bulk-flush / refill cycle that otherwise
+  // causes 10-20 s of silence during resync after a track skip or connection
+  // interruption.  The gate self-disarms on the first passing (non-stale)
+  // frame (see audio_stream_process_frame).
+  // Write late_flush_rtp before clearing the bool so the TCP task always
+  // sees a consistent pair (atomic uint32 + bool on Xtensa).
+  if (receiver.timing.late_flush_triggered) {
+    receiver.discard_before_rtp = receiver.timing.late_flush_rtp;
+    receiver.discard_before_rtp_valid = true;
+    receiver.timing.late_flush_triggered = false;
+    ESP_LOGI(TAG,
+             "Late-flush resync: discard_before_rtp=%" PRIu32
+             " (stale TCP frames will be fast-drained)",
+             receiver.timing.late_flush_rtp);
+  }
+
+  return result;
 }
 
 bool audio_receiver_has_data(void) {

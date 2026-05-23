@@ -48,6 +48,14 @@ typedef struct {
   // mutex (write flush_until_ts first, arm bool second; read bool first).
   bool deferred_flush_pending;
   uint32_t flush_until_ts;
+  // Late-flush resync gate: set by audio_timing_read when a bulk-flush fires
+  // due to late frames.  late_flush_rtp is the estimated current RTP position
+  // (frames with RTP < this value are stale and should be discarded at the
+  // TCP receive level).  The consumer (audio_receiver_read) checks this flag,
+  // arms the discard_before_rtp gate in audio_receiver_state_t, and clears it.
+  // Write late_flush_rtp first, then arm bool — atomic on Xtensa.
+  uint32_t late_flush_rtp;
+  bool late_flush_triggered;
 } audio_timing_t;
 
 void audio_timing_init(audio_timing_t *timing, size_t pending_capacity);

@@ -163,6 +163,8 @@ void audio_timing_reset(audio_timing_t *timing) {
   timing->post_flush_start_us = 0;
   timing->deferred_flush_pending = false;
   timing->flush_until_ts = 0;
+  timing->late_flush_triggered = false;
+  timing->late_flush_rtp = 0;
 }
 
 void audio_timing_set_format(audio_timing_t *timing,
@@ -510,6 +512,25 @@ size_t audio_timing_read(audio_timing_t *timing, audio_buffer_t *buffer,
             timing->playout_started = false;
             timing->ready_time_us = 0;
             timing->consecutive_late_frames = 0;
+            // Signal the receiver to arm the RTP discard gate at the TCP
+            // receive level so all remaining stale frames are dropped there
+            // instead of repeatedly filling the ring buffer and triggering
+            // cascading bulk-flushes (which causes 10-20 s of silence).
+            // Compute the estimated "current" RTP = frame RTP + how many
+            // samples we are behind.  All frames with RTP below this value
+            // are stale and can be discarded immediately.
+            {
+              int32_t rtp_advance = (int32_t)(
+                  (-early_us * (int64_t)format->sample_rate) / 1000000LL);
+              timing->late_flush_rtp =
+                  hdr->rtp_timestamp + (uint32_t)rtp_advance;
+              timing->late_flush_triggered = true;
+            }
+            // Enable post_flush so the first valid frame after the gate
+            // clears plays immediately rather than waiting out the anchor's
+            // pre-buffer window again.
+            timing->post_flush = true;
+            timing->post_flush_start_us = 0;
             if (stats) {
               stats->late_frames++;
             }
