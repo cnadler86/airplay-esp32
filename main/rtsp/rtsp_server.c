@@ -38,12 +38,14 @@ static TaskHandle_t server_task_handle = NULL;
 static bool server_running = false;
 
 // Static task memory for client tasks (one per slot)
+// TCBs must remain in internal DRAM (accessed by FreeRTOS scheduler).
+// Stacks are large and RTSP is not on the audio hot path — allocate from SPIRAM.
 static StaticTask_t s_client_tcb[2];
-static StackType_t s_client_stack[2][CLIENT_STACK_SIZE / sizeof(StackType_t)];
+static StackType_t *s_client_stack[2];
 
 // Static task memory for server task
 static StaticTask_t s_server_tcb;
-static StackType_t s_server_stack[SERVER_STACK_SIZE / sizeof(StackType_t)];
+static StackType_t *s_server_stack;
 
 // Client slot for tracking connections
 typedef struct {
@@ -515,6 +517,28 @@ static void server_task(void *pvParameters) {
 esp_err_t rtsp_server_start(void) {
   if (server_task_handle != NULL) {
     return ESP_ERR_INVALID_STATE;
+  }
+
+  // Allocate task stacks from SPIRAM on first call (RTSP is not audio hot-path).
+  for (int i = 0; i < 2; i++) {
+    if (!s_client_stack[i]) {
+      s_client_stack[i] = heap_caps_malloc(CLIENT_STACK_SIZE,
+                                           MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (!s_client_stack[i]) {
+        s_client_stack[i] = malloc(CLIENT_STACK_SIZE);
+      }
+    }
+  }
+  if (!s_server_stack) {
+    s_server_stack = heap_caps_malloc(SERVER_STACK_SIZE,
+                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_server_stack) {
+      s_server_stack = malloc(SERVER_STACK_SIZE);
+    }
+  }
+  if (!s_client_stack[0] || !s_client_stack[1] || !s_server_stack) {
+    ESP_LOGE(TAG, "Failed to allocate task stacks");
+    return ESP_ERR_NO_MEM;
   }
 
   server_task_handle = xTaskCreateStatic(

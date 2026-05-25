@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
@@ -85,8 +86,9 @@ static int event_client_socket = -1;
 static int event_listen_socket = -1;
 static TaskHandle_t event_task_handle = NULL;
 static volatile bool event_task_should_stop = false;
+// TCB must remain in internal DRAM. Stack is not on the audio hot path.
 static StaticTask_t s_event_tcb;
-static StackType_t s_event_stack[EVENT_STACK_SIZE / sizeof(StackType_t)];
+static StackType_t *s_event_stack;
 
 void rtsp_get_device_id(char *device_id, size_t len) {
   uint8_t mac[6];
@@ -236,6 +238,13 @@ static void event_port_task(void *pvParameters) {
 void rtsp_start_event_port_task(int listen_socket) {
   if (event_task_handle != NULL) {
     rtsp_stop_event_port_task();
+  }
+  if (!s_event_stack) {
+    s_event_stack = heap_caps_malloc(EVENT_STACK_SIZE,
+                                     MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_event_stack) {
+      s_event_stack = malloc(EVENT_STACK_SIZE);
+    }
   }
   event_task_should_stop = false;
   event_listen_socket = -1;
