@@ -1725,9 +1725,53 @@ static void handle_setpeers(int socket, rtsp_conn_t *conn,
   size_t body_len = req->body_len;
 
   ESP_LOGI(TAG, "%s: body_len=%zu", req->method, body_len);
-  if (body && body_len >= 8 && memcmp(body, "bplist00", 8) == 0) {
-    ESP_LOGI(TAG, "SETPEERS: got bplist");
+
+  // Determine whether this session is part of a multi-room group by counting
+  // the peers in the binary property list payload.  The root object is an
+  // array of IP-address strings — one entry per device in the AirPlay group
+  // (including the sender itself).  A single entry means single-device
+  // playback; two or more entries means multi-room sync is required.
+  //
+  // Minimal bplist00 array-count extraction (no external library needed):
+  //   - last 32 bytes = trailer: [6 pad][1 sizeof_offset][1 sizeof_objref]
+  //     [8 num_objects][8 top_object][8 offset_table_offset]  (all big-endian)
+  //   - offset_table[top_object] points to the root object
+  //   - root byte: high nibble 0xA = array, low nibble = item count (<15)
+  int peer_count = -1; // -1 = parse failed / unknown
+  if (body && body_len >= 48 && memcmp(body, "bplist00", 8) == 0) {
+    const uint8_t *t = body + body_len - 32; // trailer
+    uint8_t so = t[6];                       // sizeof_offset (1–8)
+    if (so >= 1 && so <= 8) {
+      // Read offset_table_offset (trailer bytes 24–31)
+      uint64_t oto = 0;
+      for (int i = 0; i < 8; i++)
+        oto = (oto << 8) | t[24 + i];
+      // Read top_object index (trailer bytes 16–23)
+      uint64_t top = 0;
+      for (int i = 0; i < 8; i++)
+        top = (top << 8) | t[16 + i];
+      // Locate offset entry for the root object
+      uint64_t entry = oto + top * so;
+      if (entry + so <= body_len) {
+        uint64_t root_off = 0;
+        for (int i = 0; i < (int)so; i++)
+          root_off = (root_off << 8) | body[entry + i];
+        if (root_off < body_len) {
+          uint8_t marker = body[root_off];
+          if ((marker >> 4) == 0xA) {     // array marker
+            peer_count = (marker & 0x0F); // 0–14 items in low nibble
+            if (peer_count == 0x0F)
+              peer_count = 15; // 15+ = definitely multi-room
+          }
+        }
+      }
+    }
   }
+
+  bool multiroom = (peer_count > 1);
+  ESP_LOGI(TAG, "%s: peer_count=%d -> multiroom=%s", req->method, peer_count,
+           multiroom ? "yes" : "no");
+  audio_receiver_set_multiroom(multiroom);
 
   // PTP peers changed — the PTP clock will re-lock to the new master on
   // its own.  Do NOT reset the audio timing anchor here: the anchor's

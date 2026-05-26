@@ -182,6 +182,11 @@ void audio_receiver_set_anchor_time(uint64_t clock_id, uint64_t network_time_ns,
  */
 void audio_receiver_set_playing(bool playing);
 
+// Inform the timing engine whether this device is part of a multi-room AirPlay
+// group.  When multiroom=true the quick_start re-anchor optimisation is
+// disabled so this receiver stays in sync with the other speakers.
+void audio_receiver_set_multiroom(bool multiroom);
+
 /**
  * Check if playback is currently active (not paused).
  */

@@ -496,6 +496,27 @@ size_t audio_timing_read(audio_timing_t *timing, audio_buffer_t *buffer,
             timing->anchor_valid = false;
             timing->consecutive_early_frames = 0;
             // Fall through to play the frame normally
+          } else if (timing->quick_start && !timing->multiroom) {
+            // quick_start + single-device: skip the pre-buffer wait and play
+            // this frame immediately.  Re-anchor to the actual play moment so
+            // all subsequent frames stay in step — without this, every
+            // following frame would appear ~1 s late and be dropped, since the
+            // anchor still points 1 s into the past.
+            //
+            // In multi-room mode (timing->multiroom = true) this branch is
+            // suppressed so the receiver honours the sender's anchor time and
+            // stays in sync with the other speakers in the group.
+            int64_t now_ns = (int64_t)esp_timer_get_time() * 1000LL;
+            timing->anchor_network_time_ns =
+                (uint64_t)(now_ns + ptp_clock_get_offset_ns());
+            timing->anchor_rtp_time = hdr->rtp_timestamp;
+            timing->anchor_local_time_ns = now_ns;
+            timing->consecutive_early_frames = 0;
+            ESP_LOGI(TAG,
+                     "quick_start re-anchor: rtp=%" PRIu32
+                     " (%.1f ms early) -> playing now",
+                     hdr->rtp_timestamp, (float)early_us / 1000.0f);
+            // Fall through to play the frame normally
           } else {
             // Frame is early — store it as pending and output silence.
             // The pending frame is re-checked on every subsequent call;

@@ -40,6 +40,12 @@ typedef struct {
   // silence is output until their scheduled play time, exactly like
   // shairport-sync.  Cleared once playout_started becomes true.
   bool quick_start;
+  // Multi-room flag: set by audio_receiver_set_multiroom() when SETPEERS
+  // reports more than one AirPlay peer (i.e. this device is part of a
+  // synchronised group).  When true, the quick_start re-anchor shortcut is
+  // suppressed so the receiver honours the sender's anchor timing and stays
+  // in sync with the other speakers in the group.
+  bool multiroom;
   // Deferred flush (AirPlay 2 FLUSHBUFFERED with flushFromSeq present):
   // keep playing until a frame with rtp_timestamp >= flush_until_ts arrives,
   // then bulk-flush and start fresh.  Written by the RTSP task, read by the

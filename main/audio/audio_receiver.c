@@ -374,6 +374,13 @@ void audio_receiver_reset_timing(void) {
   audio_timing_reset(&receiver.timing);
 }
 
+void audio_receiver_set_multiroom(bool multiroom) {
+  receiver.timing.multiroom = multiroom;
+  ESP_LOGI(TAG, "multiroom: %s",
+           multiroom ? "yes (anchor timing enforced)"
+                     : "no (quick_start re-anchor enabled)");
+}
+
 bool audio_receiver_is_playing(void) {
   return receiver.timing.playing;
 }
