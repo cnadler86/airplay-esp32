@@ -178,19 +178,6 @@ uint32_t audio_timing_get_hardware_latency(void) {
   return audio_output_get_hardware_latency_us();
 }
 
-uint32_t audio_timing_get_advertised_latency(const audio_timing_t *timing) {
-  // Total end-to-end latency between the phone scheduling a frame and the
-  // DAC emitting it.  Reported to the phone in outputLatencyMicros so it
-  // schedules sends to land in our sorted buffer at the right time.
-  //
-  //   output_latency_us         — controller target (jitter-buffer depth)
-  // + audio_output_get_hardware_latency_us() — I2S DMA delay (dynamic)
-  // + PIPELINE_LATENCY_US — scheduling + write delay constant
-  uint32_t base =
-      timing ? timing->output_latency_us : DEFAULT_BUFFER_LATENCY_US;
-  return base + audio_output_get_hardware_latency_us() + PIPELINE_LATENCY_US;
-}
-
 void audio_timing_set_anchor(audio_timing_t *timing,
                              const audio_format_t *format, uint64_t clock_id,
                              uint64_t network_time_ns, uint32_t rtp_time) {

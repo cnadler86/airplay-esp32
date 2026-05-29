@@ -54,11 +54,6 @@ void audio_timing_set_output_latency(audio_timing_t *timing,
                                      uint32_t latency_us);
 uint32_t audio_timing_get_output_latency(const audio_timing_t *timing);
 uint32_t audio_timing_get_hardware_latency(void);
-// Total advertised latency (output + HW + fixed pipeline processing).
-// Use this for outputLatencyMicros, NOT (output + HW) alone — otherwise the
-// phone schedules sends 15 ms tight and the fill controller will pad
-// silence to compensate for the missing decode/decrypt/net delay.
-uint32_t audio_timing_get_advertised_latency(const audio_timing_t *timing);
 void audio_timing_set_anchor(audio_timing_t *timing,
                              const audio_format_t *format, uint64_t clock_id,
                              uint64_t network_time_ns, uint32_t rtp_time);
