@@ -126,6 +126,8 @@ static const int16_t bmc_tab[256] = {
 
 static i2s_chan_handle_t tx_handle;
 static volatile bool flush_requested = false;
+static volatile bool playback_running = false;
+static TaskHandle_t playback_task_handle = NULL;
 static volatile int source_rate = 44100;
 static volatile bool resample_reinit_needed = false;
 
@@ -209,7 +211,7 @@ static void playback_task(void *arg) {
     return;
   }
 
-  while (true) {
+  while (playback_running) {
     if (resample_reinit_needed) {
       resample_reinit_needed = false;
       audio_resample_init((uint32_t)source_rate, OUTPUT_RATE, 2);
@@ -241,6 +243,11 @@ static void playback_task(void *arg) {
       vTaskDelay(1);
     }
   }
+  free(pcm);
+  free(silence);
+  free(resample_buf);
+  playback_task_handle = NULL;
+  vTaskDelete(NULL);
 }
 
 /* ── Public API ────────────────────────────────────────────────────────── */
@@ -308,8 +315,38 @@ esp_err_t audio_output_init(void) {
 }
 
 void audio_output_start(void) {
-  xTaskCreatePinnedToCore(playback_task, "spdif_play", 4096, NULL, 7, NULL,
-                          PLAYBACK_CORE);
+  playback_running = true;
+  xTaskCreatePinnedToCore(playback_task, "spdif_play", 4096, NULL, 7,
+                          &playback_task_handle, PLAYBACK_CORE);
+}
+
+void audio_output_stop(void) {
+  if (playback_task_handle == NULL) {
+    return;
+  }
+  playback_running = false;
+  int timeout = 40;
+  while (playback_task_handle != NULL && timeout-- > 0) {
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+  if (playback_task_handle != NULL) {
+    ESP_LOGW(TAG, "Playback task did not exit within timeout");
+  }
+}
+
+// SPDIF uses a pull model (playback_task calls audio_receiver_read directly);
+// audio_output_write is not used in this backend.
+esp_err_t audio_output_write(const void *data, size_t bytes, TickType_t wait) {
+  (void)data;
+  (void)bytes;
+  (void)wait;
+  return ESP_ERR_NOT_SUPPORTED;
+}
+
+// SPDIF always outputs at OUTPUT_RATE; source rate mismatches are handled by
+// audio_output_set_source_rate() which triggers the resampler.
+void audio_output_set_sample_rate(uint32_t rate) {
+  (void)rate;
 }
 
 void audio_output_flush(void) {
