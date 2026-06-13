@@ -399,6 +399,26 @@ menu "Airplay ESP Configuration"
             help
                 Receive cover-art images. Enable it only if you have a display
                 cabable of and want album art.
+
+        config AIRPLAY_LOSSLESS
+            bool "Enable lossless (ALAC) audio reception over AirPlay 2"
+            default y
+            help
+                Advertise lossless ALAC 44100/16/2 ("CD-quality Lossless", as
+                used by Apple Music) on the buffered AirPlay 2 stream by adding
+                a "supportedFormats" dictionary to the GET /info response. The
+                source (iPhone/iPad/Mac) then sends ALAC instead of lossy AAC
+                for lossless content. AAC stays advertised as a fallback, so
+                the source can still choose AAC (e.g. non-lossless content).
+
+                ALAC is decoded by the existing decoder into the same 16-bit
+                pipeline used for realtime ALAC, so no extra decode RAM is
+                needed — but the network load is higher (~1 Mbit/s vs
+                ~256 kbit/s for AAC). On marginal Wi-Fi this can cause
+                drop-outs, so leave disabled if your link is weak.
+
+                Note: Hi-Res Lossless (48000/24) is NOT supported — the audio
+                pipeline is fixed at 16-bit.
     endmenu
 
     menu "Button Configuration"

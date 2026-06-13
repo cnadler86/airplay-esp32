@@ -694,12 +694,35 @@ The timing engine holds frames that arrive early (outputting silence until their
 
 If you still hear drop-outs on AirPlay 1 / realtime playback, increase `CONFIG_AIRPLAY_RT_TIMING_THRESHOLD_MS` (at the cost of slightly looser sync).
 
+### Lossless Audio (ALAC)
+
+The receiver accepts **lossless ALAC 44100/16/2** ("CD-quality Lossless", as used by Apple Music's Lossless tier) on the buffered AirPlay 2 music stream. This is **enabled by default**.
+
+The receiver advertises a `supportedFormats` dictionary in its `GET /info` response offering ALAC on the buffered stream, so the source (iPhone/iPad/Mac) sends ALAC rather than lossy AAC for lossless content. AAC remains advertised as a fallback, so the source can still choose AAC for non-lossless material. Make sure **Lossless** is also enabled on the source (iOS: Settings → Music → Audio Quality → Lossless).
+
+ALAC is decoded into the same 16-bit pipeline as realtime ALAC, so it needs no extra decode RAM. It does use more network bandwidth — roughly **1 Mbit/s** vs ~256 kbit/s for AAC. **On marginal Wi-Fi this can cause drop-outs**; if so, disable it:
+
+```bash
+idf.py menuconfig
+# Navigate to: AirPlay Receiver → AirPlay Protocol
+# Disable "Enable lossless (ALAC) audio reception over AirPlay 2"
+```
+
+Or add to your sdkconfig defaults:
+
+```
+CONFIG_AIRPLAY_LOSSLESS=n
+```
+
+> **Note:** Hi-Res Lossless (48000/24) is **not** supported — the audio pipeline is fixed at 16-bit.
+
 ---
 
 ## Features
 
 - **AirPlay 2 protocol** — shows up natively in Control Center and all AirPlay apps
 - **ALAC & AAC decoding** — handles both live streaming (Siri, calls) and music playback
+- **Lossless (ALAC) reception** — CD-quality lossless (44.1 kHz/16-bit) over the buffered AirPlay 2 stream, enabled by default with AAC fallback (`CONFIG_AIRPLAY_LOSSLESS`)
 - **Multi-room support** — PTP-based timing for synchronized playback across devices
 - **Bluetooth A2DP** — receive audio from phones/tablets over Bluetooth (ESP32 boards only)
 - **W5500 Ethernet** — wired network with automatic WiFi failover (Esparagus Audio Brick)

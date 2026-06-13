@@ -75,6 +75,11 @@ void plist_dict_end(plist_t *p);
 void plist_dict_array_begin(plist_t *p, const char *key);
 
 /**
+ * Start a nested dictionary with key (inside dict). Close with plist_dict_end.
+ */
+void plist_dict_dict_begin(plist_t *p, const char *key);
+
+/**
  * Start an array (standalone)
  */
 void plist_array_begin(plist_t *p);

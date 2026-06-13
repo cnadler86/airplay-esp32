@@ -38,6 +38,34 @@
 
 static const char *TAG = "rtsp_handlers";
 
+// Log a human-readable summary of the incoming audio stream after SETUP.
+// stream_type: 96=realtime UDP, 103=buffered TCP, -1=AirPlay v1
+static void log_stream_info(int64_t stream_type, const audio_format_t *fmt) {
+  const char *transport;
+  if (stream_type == 103) {
+    transport = "AirPlay 2 buffered (TCP)";
+  } else if (stream_type == 96) {
+    transport = "AirPlay 2 realtime (UDP)";
+  } else {
+    transport = "AirPlay 1 / RAOP (UDP)";
+  }
+
+  const char *quality;
+  if (strcmp(fmt->codec, "AppleLossless") == 0 ||
+      strcmp(fmt->codec, "ALAC") == 0) {
+    quality = stream_type == 103 ? "lossless ALAC (buffered)" : "lossless ALAC (realtime)";
+  } else if (strstr(fmt->codec, "AAC") || strstr(fmt->codec, "aac") ||
+             strstr(fmt->codec, "mpeg4-generic")) {
+    quality = "lossy AAC";
+  } else {
+    quality = fmt->codec;
+  }
+
+  ESP_LOGI(TAG, "Stream: %s | codec: %s | %d Hz / %d-bit / %dch | spf: %d",
+           transport, quality, fmt->sample_rate, fmt->bits_per_sample,
+           fmt->channels, fmt->frame_size);
+}
+
 // ============================================================================
 // Codec Registry
 // ============================================================================
@@ -519,6 +547,20 @@ static void handle_get(int socket, rtsp_conn_t *conn, const rtsp_request_t *req,
     plist_dict_end(&p);
     plist_array_end(&p);
 
+#ifdef CONFIG_AIRPLAY_LOSSLESS
+    // Advertise the formats we accept on the buffered (type 103) stream so the
+    // source offers lossless ALAC instead of lossy AAC for lossless content.
+    // bufferStream bitmask (https://emanuelecozzi.net/docs/airplay2/audio):
+    //   0x40000   ALAC/44100/S16/2  (CD-quality lossless)
+    //   0x400000  AAC-LC/44100/2    (fallback)
+    //   0x800000  AAC-LC/48000/2    (fallback)
+    // audioStream (realtime, type 96) mirrors shairport-sync's value.
+    plist_dict_dict_begin(&p, "supportedFormats");
+    plist_dict_uint(&p, "audioStream", 0x1440800ULL);
+    plist_dict_uint(&p, "bufferStream", 0x40000ULL | 0x400000ULL | 0x800000ULL);
+    plist_dict_end(&p);
+#endif
+
     plist_dict_end(&p);
     size_t body_len = plist_end(&p);
 
@@ -892,6 +934,7 @@ static void parse_sdp(rtsp_conn_t *conn, const char *sdp, size_t len) {
   conn->bits_per_sample = format.bits_per_sample;
 
   audio_receiver_set_format(&format);
+  log_stream_info(-1, &format);
 
   if (encrypt.type != AUDIO_ENCRYPT_NONE) {
     audio_receiver_set_encryption(&encrypt);
@@ -971,6 +1014,7 @@ static void handle_setup(int socket, rtsp_conn_t *conn,
           rtsp_codec_configure(codec_type, &format, sample_rate,
                                samples_per_frame);
           audio_receiver_set_format(&format);
+          log_stream_info(stream_type, &format);
         }
       }
     }
@@ -1092,6 +1136,7 @@ static void handle_setup(int socket, rtsp_conn_t *conn,
       audio_format_t format = {0};
       rtsp_codec_configure(2, &format, 44100, 352); // ct=2 is ALAC
       audio_receiver_set_format(&format);
+      log_stream_info(-1, &format);
       audio_receiver_set_stream_type((audio_stream_type_t)stream_type);
 
       // Stop PTP (AirPlay 2 timing) to free socket slots for audio.
